@@ -7,7 +7,7 @@ import chalk from 'chalk';
 import NodeCache from 'node-cache';
 import * as BaileysPkg from '@whiskeysockets/baileys';
 import { fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
-import useLMDBAuthState, { lmdbStore, registerSubBotId } from './auth_lmdb.js';
+import useLMDBAuthState, { lmdbStore, registerSubBotId, startAutoPurge, purgeSessionGarbage } from './auth_lmdb.js';
 import { observeEvents } from '../event/detect.js';
 import { initPreview } from '../../src/utils/preview-link.js';
 import { initButtons } from '../../src/utils/buttons.js';
@@ -48,6 +48,8 @@ const loadMessageRouter = async () => {
     }
 };
 await loadMessageRouter();
+
+startAutoPurge();
 
 const FALLBACK_VERSION = [2, 3000, 1043716065];
 let cachedVersion = FALLBACK_VERSION;

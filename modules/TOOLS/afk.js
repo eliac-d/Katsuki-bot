@@ -19,6 +19,13 @@ function formatDuration(ms) {
     return parts.join(' ');
 }
 
+
+function extractReason(rawText) {
+    return rawText
+        .replace(/^[°•π÷×¶∆£¢€¥$\%\/#!.]?(afk|inactivo|ausente)[ \t]*/i, '')
+        .trim();
+}
+
 export const afkModule = {
     commands: {
         afk: {
@@ -31,15 +38,15 @@ export const afkModule = {
                 const sender = jidNormalizedUser(m.sender);
                 const rawText = (m.text || m.body || m.msg?.text || m.msg?.caption || '').trim();
 
-                const isAfkCommand = /^[°•π÷×¶∆£¢€¥$\%\/#!.]?(afk\vert{}inactivo\vert{}ausente)(\s+\vert{}$)/i.test(rawText);
+                const isAfkCommand = /^[°•π÷×¶∆£¢€¥$\%\/#!.]?(afk|inactivo|ausente)(\s|$)/i.test(rawText);
 
+                
                 if (global.afkUsers[sender]) {
                     const afkData = global.afkUsers[sender];
                     const now = Date.now();
 
                     if (!isAfkCommand && (now - afkData.time) > 1000) {
-                        const elapsed = now - afkData.time;
-                        const tiempoTexto = formatDuration(elapsed);
+                        const tiempoTexto = formatDuration(now - afkData.time);
                         delete global.afkUsers[sender];
 
                         await conn.sendMessage(m.chat, {
@@ -49,10 +56,10 @@ export const afkModule = {
                     }
                 }
 
+                
                 const rawMentions = m.mentionedJid || m.msg?.contextInfo?.mentionedJid || [];
                 const targets = rawMentions.map(j => jidNormalizedUser(j));
 
-                const ctxInfo = m.msg?.contextInfo || m.message?.extendedTextMessage?.contextInfo;
                 if (m.quoted?.sender) {
                     targets.push(jidNormalizedUser(m.quoted.sender));
                 }
@@ -62,6 +69,7 @@ export const afkModule = {
 
                 if (afkTargets.length === 0) return false;
 
+                
                 const now = Date.now();
                 const cooldownKey = `${m.chat}_${sender}`;
                 const lastNotified = global.afkCooldowns[cooldownKey] || 0;
@@ -69,23 +77,21 @@ export const afkModule = {
                 if (now - lastNotified < 10000) return false;
                 global.afkCooldowns[cooldownKey] = now;
 
-                const mentionsArray = [sender];
-                let responseText = `📌 *USUARIO(S) NO DISPONIBLE(S)*\n\nHola @${sender.split('@')[0]}, los siguientes usuarios están ausentes:\n\n`;
+                
+                const jid = afkTargets[0];
+                const afkData = global.afkUsers[jid];
+                const tiempoTexto = formatDuration(now - afkData.time);
 
-                for (const jid of afkTargets) {
-                    const afkData = global.afkUsers[jid];
-                    const tiempoTexto = formatDuration(now - afkData.time);
-
-                    responseText += `• @${jid.split('@')[0]}\n`;
-                    responseText += `  └ *Motivo:* ${afkData.reason}\n`;
-                    responseText += `  └ *Tiempo:* hace ${tiempoTexto}\n\n`;
-
-                    mentionsArray.push(jid);
-                }
+                const responseText =
+                    `📌 *USUARIO NO DISPONIBLE*\n\n` +
+                    `Hola @${sender.split('@')[0]}, el usuario que mencionaste está ausente:\n\n` +
+                    `• @${jid.split('@')[0]}\n` +
+                    `  └ *Motivo:* ${afkData.reason}\n` +
+                    `  └ *Tiempo:* hace ${tiempoTexto}`;
 
                 await conn.sendMessage(m.chat, {
-                    text: responseText.trim(),
-                    mentions: mentionsArray
+                    text: responseText,
+                    mentions: [sender, jid]
                 }, { quoted: m }).catch(() => null);
 
                 return false;
@@ -93,7 +99,14 @@ export const afkModule = {
 
             run: async (m, { conn, args }) => {
                 const userId = jidNormalizedUser(m.sender);
-                const reason = args.join(' ').trim() || 'Sin motivo especificado';
+                const rawText = (m.text || m.body || m.msg?.text || m.msg?.caption || '').trim();
+
+                
+                let reason = extractReason(rawText);
+
+                
+                if (!reason) reason = args.join(' ').trim();
+                if (!reason) reason = 'Sin motivo especificado';
 
                 global.afkUsers[userId] = {
                     time: Date.now(),

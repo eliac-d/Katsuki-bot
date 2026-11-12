@@ -1,10 +1,11 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://dix.lat/icon.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://dix.lat/logo.svg?788">
   <source media="(prefers-color-scheme: light)" srcset="https://cdn.dix.lat/me/0lkj_20260829-c91x-2p9h-f407.png">
-  <img src="https://cdn.dix.lat/me/0lkj_20260829-c91x-2p9h-f407.png" alt="Katsuki MD" width="88">
+  <img src="https://cdn.dix.lat/me/0lkj_20260829-c91x-2p9h-f407.png" alt="Katsuki MD" width="276" height="auto" style="width: 276px; height: auto;">
 </picture>
+
 
 # Katsuki MD
 
@@ -455,12 +456,12 @@ pm2 save
 
 <a href="https://dix.lat">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://dix.lat/icon.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="https://dix.lat/icon.svg?67">
     <source media="(prefers-color-scheme: light)" srcset="https://cdn.dix.lat/me/0lkj_20260829-c91x-2p9h-f407.png">
-    <img src="https://cdn.dix.lat/me/0lkj_20260829-c91x-2p9h-f407.png" alt="Dix" width="36">
+    <img src="https://cdn.dix.lat/me/0lkj_20260829-c91x-2p9h-f407.png" alt="Dix" width="176">
   </picture>
 </a>
 
-[dix.lat](https://dix.lat) · [Repositorio](https://github.com/eliac-d/Katsuki-bot)
+[dix.lat](https://dix.lat)
 
 </div>

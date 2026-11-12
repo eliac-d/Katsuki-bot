@@ -14,7 +14,6 @@ async function enviarPromptDixDeepAI(text, userId) {
     ...(session.client_session_id && { client_session_id: session.client_session_id })
   };
 
-  
   const apiKeyHeader = typeof apikey !== 'undefined' ? apikey : "";
 
   const { data: res } = await axios.get(`https://dix.lat/v1/deepai`, {
@@ -50,6 +49,27 @@ function limpiarTextoParaTTS(texto) {
     .trim();
 }
 
+function dividirTextoEnFragmentos(texto, maxLongitud = 250) {
+  const palabras = texto.split(" ");
+  const fragmentos = [];
+  let fragmentoActual = "";
+
+  for (const palabra of palabras) {
+    if ((fragmentoActual + " " + palabra).trim().length > maxLongitud) {
+      fragmentos.push(fragmentoActual.trim());
+      fragmentoActual = palabra;
+    } else {
+      fragmentoActual += (fragmentoActual === "" ? "" : " ") + palabra;
+    }
+  }
+
+  if (fragmentoActual.trim() !== "") {
+    fragmentos.push(fragmentoActual.trim());
+  }
+
+  return fragmentos;
+}
+
 async function obtenerAudioTTS(texto) {
   const voces = ["6", "8"];
   const vozElegida = voces[Math.floor(Math.random() * voces.length)];
@@ -59,14 +79,22 @@ async function obtenerAudioTTS(texto) {
     throw new Error("El texto procesado quedó vacío para la lectura.");
   }
 
-  const url = `https://dix.lat/v1/tts?text=${encodeURIComponent(textoLimpio)}&voice=${vozElegida}`;
-  const response = await fetch(url);
+  const fragmentos = dividirTextoEnFragmentos(textoLimpio, 250);
+  const buffers = [];
 
-  if (!response.ok) {
-    throw new Error(`Error en API TTS: ${response.status}`);
+  for (const fragmento of fragmentos) {
+    const url = `https://dix.lat/v1/tts?text=${encodeURIComponent(fragmento)}&voice=${vozElegida}`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`Error en API TTS: ${response.status}`);
+    }
+
+    const bufferFragmento = await response.buffer();
+    buffers.push(bufferFragmento);
   }
 
-  return await response.buffer();
+  return Buffer.concat(buffers);
 }
 
 export const gptCommand = {
@@ -110,7 +138,7 @@ export const gptCommand = {
           console.error(e);
           await m.react("❌");
           await conn.sendMessage(m.chat, {
-            text: `> ⚔ ERROR: No se pudo generar la respuesta por voz.`
+            text: e.message
           }, { quoted: m });
         }
       }

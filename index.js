@@ -155,27 +155,44 @@ global._dbSaveInterval = setInterval(async () => {
 
 const sessionDir = './sessions/main';
 
-const cleanDeviceList = async (maxFiles = 500) => {
+const deepCleanSession = async () => {
     try {
         const files = await fsP.readdir(sessionDir).catch(() => []);
-        const deviceFiles = files.filter(f => f.startsWith('device-list-'));
-        if (deviceFiles.length <= maxFiles) return;
-        const withStats = await Promise.all(
-            deviceFiles.map(async f => {
-                const fp = path.join(sessionDir, f);
-                const stat = await fsP.stat(fp).catch(() => null);
-                return { path: fp, mtime: stat?.mtimeMs || 0 };
-            })
-        );
-        withStats.sort((a, b) => a.mtime - b.mtime);
-        const toDelete = withStats.slice(0, withStats.length - maxFiles);
-        await Promise.all(toDelete.map(f => fsP.unlink(f.path).catch(() => {})));
+        const now = Date.now();
+        let deletedCount = 0;
+
+        for (const file of files) {
+            const filePath = path.join(sessionDir, file);
+
+            if (file.startsWith('device-list-') || file.startsWith('lid-mapping-')) {
+                await fsP.unlink(filePath).catch(() => {});
+                deletedCount++;
+                continue;
+            }
+
+            if (file.startsWith('pre-key-')) {
+                const stat = await fsP.stat(filePath).catch(() => null);
+                if (stat && (now - stat.mtimeMs > 7 * 24 * 60 * 60 * 1000)) {
+                    await fsP.unlink(filePath).catch(() => {});
+                    deletedCount++;
+                }
+            }
+
+            if (file.startsWith('session-') || file.startsWith('sender-key-') || file.startsWith('identity-key-')) {
+                const stat = await fsP.stat(filePath).catch(() => null);
+                if (stat && (now - stat.mtimeMs > 15 * 24 * 60 * 60 * 1000)) {
+                    await fsP.unlink(filePath).catch(() => {});
+                    deletedCount++;
+                }
+            }
+        }
+        if (deletedCount > 0) log.info(`[LIMPIEZA] Se eliminaron ${deletedCount} archivos basura de la sesión.`);
     } catch (_) {}
 };
 
-await cleanDeviceList();
-if (global._cleanDeviceInterval) clearInterval(global._cleanDeviceInterval);
-global._cleanDeviceInterval = setInterval(cleanDeviceList, 6 * 60 * 60 * 1000);
+await deepCleanSession();
+if (global._deepCleanInterval) clearInterval(global._deepCleanInterval);
+global._deepCleanInterval = setInterval(deepCleanSession, 3 * 60 * 60 * 1000);
 
 global.__filename = (pathURL = import.meta.url, rmPrefix = platform !== 'win32') =>
     rmPrefix ? /file:\/\/\//.test(pathURL) ? fileURLToPath(pathURL) : pathURL : pathURL;
@@ -285,7 +302,7 @@ global.reload = async function (restatConn) {
         } catch (_) {}
         try { if (global.conn?.end) global.conn.end(new Error('Reconnection')); } catch (_) {}
         await new Promise(r => setTimeout(r, 1000));
-        await cleanDeviceList(200);
+        await deepCleanSession();
         await new Promise(r => setTimeout(r, 500));
         const { state: newState, saveCreds: newSaveCreds } = await useMultiFileAuthState(sessionDir);
         global.conn = makeWASocket({

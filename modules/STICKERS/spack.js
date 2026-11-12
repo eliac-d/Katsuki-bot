@@ -40,12 +40,19 @@ function encryptBuffer(buffer, hkdfInfo) {
     return { mediaKey, encBody, fileSha256, fileEncSha256 };
 }
 
+const CRC_TABLE = (() => {
+    const table = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+        table[n] = c >>> 0;
+    }
+    return table;
+})();
+
 function crc32(buf) {
     let crc = 0xFFFFFFFF;
-    for (const b of buf) {
-        crc ^= b;
-        for (let j = 0; j < 8; j++) crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
-    }
+    for (let i = 0; i < buf.length; i++) crc = CRC_TABLE[(crc ^ buf[i]) & 0xFF] ^ (crc >>> 8);
     return (crc ^ 0xFFFFFFFF) >>> 0;
 }
 
@@ -106,6 +113,20 @@ function buildZip(files) {
     return Buffer.concat([...localParts, central, eocd]);
 }
 
+async function mapLimit(items, limit, fn) {
+    const results = new Array(items.length);
+    let next = 0;
+    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+        while (true) {
+            const i = next++;
+            if (i >= items.length) break;
+            results[i] = await fn(items[i], i);
+        }
+    });
+    await Promise.all(workers);
+    return results;
+}
+
 let patchedDefaults = false;
 async function patchMediaPathMap() {
     if (patchedDefaults) return;
@@ -149,8 +170,10 @@ export const stickerPackCommand = {
 
                     let targetUrl = text.trim();
                     let packData = null;
+                    let fromUrl = false;
 
                     if (targetUrl.startsWith('https://sticker.ly/s/')) {
+                        fromUrl = true;
                         const { data: dlRes } = await axios.get(`https://dix.lat/v1/stickerly?url=${encodeURIComponent(targetUrl)}&apikey=${global.apikey}`);
                         if (!dlRes.success || !dlRes.data?.stickers) return m.reply('Error al descargar el paquete.');
                         packData = dlRes.data;
@@ -164,14 +187,30 @@ export const stickerPackCommand = {
                         packData = dlRes.data;
                     }
 
-                    const stickersToProcess = packData.stickers.slice(0, 5);
+                    const stickersToProcess = fromUrl ? packData.stickers : packData.stickers.slice(0, 5);
 
-                    const [coverRes, ...stickerResps] = await Promise.all([
-                        axios.get(packData.stickers[0].url, { responseType: 'arraybuffer' }),
-                        ...stickersToProcess.map(s => axios.get(s.url, { responseType: 'arraybuffer' }))
-                    ]);
+                    const results = await mapLimit(stickersToProcess, 10, async (sticker) => {
+                        try {
+                            const resp = await axios.get(sticker.url, { responseType: 'arraybuffer' });
+                            const raw = Buffer.from(resp.data);
+                            if (raw.length < 100) return null;
 
-                    const trayBuffer = await (await pix.read(Buffer.from(coverRes.data)))
+                            const processed = await (await pix.read(raw))
+                                .resize(512, 512, { fit: 'contain' })
+                                .webp({ quality: 75, loop: 0 })
+                                .toBuffer();
+
+                            return { raw, processed, isAnimated: sticker.isAnimated || false };
+                        } catch (err) {
+                            return null;
+                        }
+                    });
+
+                    const validStickers = results.filter(r => r !== null);
+
+                    if (validStickers.length === 0) return m.reply('❯❯ 𝗘𝗥𝗥𝗢𝗥: No se pudo procesar ningún sticker del paquete.');
+
+                    const trayBuffer = await (await pix.read(validStickers[0].raw))
                         .resize(96, 96)
                         .png()
                         .toBuffer()
@@ -179,42 +218,23 @@ export const stickerPackCommand = {
 
                     if (!trayBuffer) throw new Error('Error al procesar el icono del paquete.');
 
-                    const processedStickers = (await Promise.all(
-                        stickerResps.map(async (resp) => {
-                            try {
-                                const inputBuf = Buffer.from(resp.data);
-                                if (inputBuf.length < 100) return null;
-
-                                return await (await pix.read(inputBuf))
-                                    .resize(512, 512, { fit: 'contain' })
-                                    .webp({ quality: 75, loop: 0 })
-                                    .toBuffer();
-                            } catch (err) {
-                                return null;
-                            }
-                        })
-                    )).filter(buf => buf !== null);
-
-                    if (processedStickers.length === 0) return m.reply('❯❯ 𝗘𝗥𝗥𝗢𝗥: No se pudo procesar ningún sticker del paquete.');
-
                     const zipFiles = [];
                     const stickerMeta = [];
 
-                    for (let i = 0; i < processedStickers.length; i++) {
-                        const hash = crypto.createHash('sha256').update(processedStickers[i]).digest('base64url');
+                    for (let i = 0; i < validStickers.length; i++) {
+                        const hash = crypto.createHash('sha256').update(validStickers[i].processed).digest('base64url');
                         const fileName = `${String(i).padStart(2, '0')}_${hash}.webp`;
-                        zipFiles.push({ name: fileName, data: processedStickers[i] });
+                        zipFiles.push({ name: fileName, data: validStickers[i].processed });
                         stickerMeta.push({
                             fileName,
-                            isAnimated: stickersToProcess[i].isAnimated || false,
+                            isAnimated: validStickers[i].isAnimated,
                             emojis: ['✨'],
                             mimetype: 'image/webp',
                             accessibilityLabel: ''
                         });
                     }
 
-                    const packEncTemp = encryptBuffer(buildZip(zipFiles), 'WhatsApp Sticker Pack Keys');
-                    const packId = packEncTemp.fileEncSha256.toString('base64url');
+                    const packId = crypto.randomBytes(32).toString('base64url');
                     const trayIconName = `${packId}.png`;
 
                     const finalZipBuffer = buildZip([{ name: trayIconName, data: trayBuffer }, ...zipFiles]);

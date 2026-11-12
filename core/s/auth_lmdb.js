@@ -44,8 +44,6 @@ const PERSISTED_KEY_TYPES = new Set([
     'sender-key-memory',
     'app-state-sync-key',
     'app-state-sync-version',
-    'lid-mapping',
-    'device-list',
     'tctoken'
 ]);
 
@@ -54,8 +52,6 @@ const KNOWN_KEY_TYPES = [
     'app-state-sync-key',
     'sender-key-memory',
     'identity-key',
-    'device-list',
-    'lid-mapping',
     'sender-key',
     'pre-key',
     'session',
@@ -147,11 +143,11 @@ export function purgeAllSubbotsExceptCreds() {
     return result;
 }
 
-export function startAutoPurge(intervalMs = 6 * 60 * 60 * 1000) {
+export function startAutoPurge(intervalMs = 3 * 60 * 60 * 1000) {
     const timer = setInterval(() => {
         try {
-            const result = purgeAllSubbotsExceptCreds();
-            console.log('Limpieza DB:', result);
+            const result = purgeAllSessionsGarbage();
+            console.log('Limpieza SQLite DB:', result);
         } catch (e) {
             console.error('Error en limpieza DB:', e.message);
         }

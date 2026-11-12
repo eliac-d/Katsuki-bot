@@ -37,14 +37,18 @@ export const smsg = async (conn, m) => {
                 } else if (typeof PATH === 'string' && PATH.startsWith('data:')) {
                     data = Buffer.from(PATH.split(',')[1], 'base64');
                 } else if (typeof PATH === 'string' && PATH.startsWith('http')) {
-                    res = await axios.get(PATH, { responseType: 'arraybuffer' });
-                    data = Buffer.from(res.data);
+                    res = await axios.get(PATH, { responseType: 'stream' });
+                    data = res.data;
                 } else {
                     data = await fs.promises.readFile(PATH);
                 }
                 const mime = res?.headers?.['content-type'] || 'image/png';
                 const filename = `file_${Date.now()}.${mime.split('/')[1] || 'bin'}`;
-                if (save) await fs.promises.writeFile(filename, data).catch(() => null);
+                if (save) {
+                    const writer = fs.createWriteStream(filename);
+                    if (data.pipe) data.pipe(writer);
+                    else await fs.promises.writeFile(filename, data).catch(() => null);
+                }
                 return { res, filename, data, mime };
             } catch {
                 return { res: null, filename: '', data: Buffer.alloc(0), mime: 'application/octet-stream' };
@@ -55,8 +59,9 @@ export const smsg = async (conn, m) => {
             try {
                 const { data, mime } = await conn.getFile(path, false);
                 const mtype = /webp/.test(mime) ? 'sticker' : /image/.test(mime) ? 'image' : /video/.test(mime) ? 'video' : /audio/.test(mime) ? (ptt ? 'ptt' : 'audio') : 'document';
+                const content = data.pipe ? { stream: data } : data;
                 return await conn.sendMessage(conn.decodeJid(jid), {
-                    [mtype]: data, caption, mimetype: mime, fileName: filename,
+                    [mtype]: content, caption, mimetype: mime, fileName: filename,
                     contextInfo: { mentionedJid: options.mentions || conn.parseMention(caption) || [], ...options.contextInfo },
                     ...options
                 }, { quoted, ...options });
