@@ -65,23 +65,29 @@ export const downloadsModule = {
                 const isDocument = /mp4$/i.test(command);
 
                 try {
-                    const youtubeRegex = /(?:https?:\/\/)?(?:www\.)?(?:microsoft\.com\/)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|live\/|watch\?v=|watch\?.+&v=))([a-zA-Z0-9_-]{11})/;
+                    const youtubeRegex = /(?:https?:\/\/)?(?:(?:www|m|music)\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|live\/|watch\?(?:.*&)?v=))([a-zA-Z0-9_-]{11})/;
                     const videoMatch = text.match(youtubeRegex);
 
-                    let searchResults = null;
+                    let videoSearchResult = null;
 
                     try {
                         if (videoMatch && videoMatch[1]) {
-                            const cleanUrl = `https://www.youtube.com/watch?v=${videoMatch[1]}`;
-                            searchResults = await yts(cleanUrl);
+                            const videoId = videoMatch[1];
+                            const r = await yts({ videoId });
+
+                            if (r && r.videoId) {
+                                videoSearchResult = r;
+                            } else {
+                                const searchResults = await yts(`https://www.youtube.com/watch?v=${videoId}`);
+                                videoSearchResult = searchResults?.videos?.[0];
+                            }
                         } else {
-                            searchResults = await yts(text);
+                            const searchResults = await yts(text);
+                            videoSearchResult = searchResults?.videos?.[0];
                         }
                     } catch (ytsErr) {
                         return conn.reply(m.chat, 'Error de conexión con el servicio de búsqueda de YouTube. Intenta de nuevo.', m);
                     }
-
-                    const videoSearchResult = searchResults?.videos?.[0];
 
                     if (!videoSearchResult) return conn.reply(m.chat, 'No se encontraron resultados de YouTube.', m);
 

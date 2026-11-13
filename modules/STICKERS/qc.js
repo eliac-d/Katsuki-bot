@@ -3,9 +3,9 @@ import { fileURLToPath } from "url";
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
-import fluent_ffmpeg from "fluent-ffmpeg";
 import webp from "node-webpmux";
 import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
+import * as pix from 'pixcore';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -57,40 +57,6 @@ async function addExif(webpSticker, packname, author, categories = ["🤩"], ext
     await img.load(webpSticker);
     img.exif = exif;
     return await img.save(null);
-}
-
-function sticker6(img) {
-    return new Promise(async (resolve, reject) => {
-        try {
-            const tmpDir = path.join(__dirname, '../../tmp');
-            if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-            const tmp = path.join(tmpDir, `${+new Date()}.png`);
-            const out = path.join(tmp + ".webp");
-            await fs.promises.writeFile(tmp, img);
-            fluent_ffmpeg(tmp)
-                .on("error", function (err) {
-                    if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
-                    reject(err);
-                })
-                .on("end", async function () {
-                    if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
-                    if (fs.existsSync(out)) {
-                        const result = await fs.promises.readFile(out);
-                        fs.unlinkSync(out);
-                        resolve(result);
-                    }
-                })
-                .addOutputOptions([
-                    `-vcodec`, `libwebp`,
-                    `-vf`, `scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000`,
-                    `-quality`, `100`
-                ])
-                .toFormat("webp")
-                .save(out);
-        } catch (e) {
-            reject(e);
-        }
-    });
 }
 
 function wrapText(ctx, text, maxWidth) {
@@ -221,7 +187,11 @@ export const qcCommand = {
                     }
 
                     const buffer = canvas.toBuffer('image/png');
-                    let stikerBuffer = await sticker6(buffer);
+                    
+                    let stikerBuffer = await (await pix.read(buffer))
+                        .resize(512, 512, { fit: 'contain' })
+                        .webp({ quality: 100 })
+                        .toBuffer();
 
                     let pack = typeof name === 'function' ? name(conn) : 'QC Sticker'; 
                     let auth = nombre;

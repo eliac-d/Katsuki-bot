@@ -9,20 +9,11 @@ import { fileTypeFromBuffer } from "file-type";
 import * as pix from 'pixcore';
 
 const ffmpeg = typeof ffmpegModule === 'function' ? ffmpegModule : (ffmpegModule.default || ffmpegModule);
+ffmpeg.setFfmpegPath('ffmpeg');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TMP_DIR = process.env.TMPDIR || '/home/container/tmp';
 if (!existsSync(TMP_DIR)) mkdirSync(TMP_DIR, { recursive: true });
-
-try {
-    const ffmpegInstaller = await import("@ffmpeg-installer/ffmpeg");
-    const ffmpegPath = ffmpegInstaller?.default?.path || ffmpegInstaller?.path || 'ffmpeg';
-    ffmpeg.setFfmpegPath(ffmpegPath);
-} catch (e) {
-    try {
-        ffmpeg.setFfmpegPath('ffmpeg');
-    } catch (_) {}
-}
 
 let activeFfmpegCommand = null;
 

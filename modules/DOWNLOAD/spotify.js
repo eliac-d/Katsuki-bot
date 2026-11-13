@@ -11,57 +11,69 @@ export const spotifyDownloadModule = {
 
                 await m.react('🕓');
 
+                const API_KEY = apikey;
+                const SEARCH_URL = 'https://dix.lat/v1/s/spotify';
+                const DOWNLOAD_URL = 'https://dix.lat/v1/d/spotify';
+
                 try {
                     const isUrl = text.match(/^(https?:\/\/)?(www\.)?(open\.spotify\.com|spotify\.link)\/.+$/gi);
-                    let track;
+                    let trackUrl = '';
+                    let trackInfo = {};
 
                     if (isUrl) {
-                        track = { url: text, title: 'Spotify Track' };
+                        trackUrl = text;
+                        trackInfo = { title: 'Spotify Track', artist: 'Desconocido', album: '-', duration: '-', year: '-' };
                     } else {
-                        const searchRes = await fetch(`https://api.delirius.online/search/spotify?q=${encodeURIComponent(text)}&limit=1`);
+                        const searchRes = await fetch(`${SEARCH_URL}?q=${encodeURIComponent(text)}&limit=1`);
                         const searchData = await searchRes.json();
 
-                        if (!searchData.status || !searchData.data.length) {
+                        if (!searchData.success || !searchData.data || !searchData.data.results || searchData.data.results.length === 0) {
                             await m.react('✖️');
                             return m.reply('> ⚔ ERROR: No se encontraron resultados.');
                         }
 
-                        track = searchData.data[0];
+                        const result = searchData.data.results[0];
+                        trackUrl = result.link;
+                        trackInfo = {
+                            title: result.title,
+                            artist: result.artist,
+                            album: result.album,
+                            duration: result.duration,
+                            year: result.year || 'Desconocido',
+                            image: result.image
+                        };
 
                         let txt = `♫ SPOTIFY DOWNLOAD 𝄞\n\n`;
-                        txt += `✰ TÍTULO: ${track.title}\n`;
-                        txt += `♛ ARTISTA: ${track.artist}\n`;
-                        txt += `✎ ÁLBUM: ${track.album}\n`;
-                        txt += `⌬ DURACIÓN: ${track.duration}\n`;
-                        txt += `◈ PUBLICADO: ${track.publish}\n\n`;
+                        txt += `✰ TÍTULO: ${trackInfo.title}\n`;
+                        txt += `♛ ARTISTA: ${trackInfo.artist}\n`;
+                        txt += `✎ ÁLBUM: ${trackInfo.album}\n`;
+                        txt += `⌬ DURACIÓN: ${trackInfo.duration}\n`;
+                        txt += `◈ PUBLICADO: ${trackInfo.year}\n\n`;
                         txt += `⌗ Procesando audio, espere un momento...`;
 
-                        await conn.sendMessage(m.chat, { 
-                            image: { url: track.image }, 
-                            caption: txt 
-                        }, { quoted: m });
+                        if (trackInfo.image) {
+                            await conn.sendMessage(m.chat, { 
+                                image: { url: trackInfo.image }, 
+                                caption: txt 
+                            }, { quoted: m });
+                        } else {
+                            await m.reply(txt);
+                        }
                     }
 
-                    const downloadRes = await fetch(`https://api.delirius.online/download/spotifydl?url=${track.url}`);
-                    const textResponse = await downloadRes.text();
+                    const downloadRes = await fetch(`${DOWNLOAD_URL}?apikey=${API_KEY}&url=${encodeURIComponent(trackUrl)}`);
+                    const downloadData = await downloadRes.json();
 
-                    let downloadData;
-                    try {
-                        downloadData = JSON.parse(textResponse);
-                    } catch (e) {
-                        await m.react('✖️');
-                        return console.error("Error parseando JSON de descarga");
-                    }
-
-                    if (downloadData.status && downloadData.data.download) {
+                    if (downloadData.success && downloadData.data && downloadData.data.downloadURL) {
                         await conn.sendMessage(m.chat, { 
-                            audio: { url: downloadData.data.download }, 
+                            audio: { url: downloadData.data.downloadURL }, 
                             mimetype: 'audio/mpeg', 
-                            fileName: `${track.title}.mp3` 
+                            fileName: `${downloadData.data.title || trackInfo.title}.mp3` 
                         }, { quoted: m });
                         await m.react('✅');
                     } else {
                         await m.react('✖️');
+                        m.reply('> ⚔ ERROR: No se pudo generar el enlace de descarga.');
                     }
 
                 } catch (e) {
