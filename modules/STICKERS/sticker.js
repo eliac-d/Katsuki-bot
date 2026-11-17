@@ -144,6 +144,11 @@ export const stickerCommand = {
             run: async (m, { conn, args, store }) => {
                 try {
                     let q = m.quoted ? m.quoted : m;
+
+                    if (q.msg?.viewOnce || q.message?.imageMessage?.viewOnce || q.message?.videoMessage?.viewOnce) {
+                        return m.reply('> *⚠️ Lo siento, no se puede extraer el código de un mensaje viewOnce. Por favor, envía el archivo imagen o video normal para poder crear el sticker.*');
+                    }
+
                     let txt = args.join(' ');
                     let bot = typeof name === 'function' ? name(conn) : 'Bot';
                     let user = m.pushName || 'User';
