@@ -145,11 +145,7 @@ export const stickerCommand = {
                 try {
                     let q = m.quoted ? m.quoted : m;
                     
-                    let isViewOnce = (q.msg || q).viewOnce || (q.message && Object.values(q.message)[0]?.viewOnce);
-                    if (isViewOnce) {
-                        await m.react('❌');
-                        return m.reply('> *⚠️ Por motivos de privacidad y seguridad, no está permitido procesar archivos multimedia configurados para verse una vez (View Once).*');
-                    }
+                    
 
                     let txt = args.join(' ');
                     let bot = typeof name === 'function' ? name(conn) : 'Bot';
