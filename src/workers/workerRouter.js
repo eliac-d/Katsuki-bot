@@ -100,7 +100,7 @@ function processVideoSticker(img, ext) {
 }
 
 async function processStickerBuffer(buffer, packname, author, categories = ["🤩"]) {
-    if (buffer.length > 15 * 1024 * 1024) throw new Error('Archivo demasiado grande (máx 15MB)');
+    if (buffer.length > 30 * 1024 * 1024) throw new Error('Archivo demasiado grande (máx 30MB)');
 
     const type = (await fileTypeFromBuffer(buffer)) || { mime: "image/jpeg", ext: "jpg" };
 
