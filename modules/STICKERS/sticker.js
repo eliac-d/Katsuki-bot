@@ -144,9 +144,11 @@ export const stickerCommand = {
             run: async (m, { conn, args, store }) => {
                 try {
                     let q = m.quoted ? m.quoted : m;
-
-                    if (q.msg?.viewOnce || q.message?.imageMessage?.viewOnce || q.message?.videoMessage?.viewOnce) {
-                        return m.reply('> *⚠️ Lo siento, no se puede extraer el código de un mensaje viewOnce. Por favor, envía el archivo imagen o video normal para poder crear el sticker.*');
+                    
+                    let isViewOnce = (q.msg || q).viewOnce || (q.message && Object.values(q.message)[0]?.viewOnce);
+                    if (isViewOnce) {
+                        await m.react('❌');
+                        return m.reply('> *⚠️ Por motivos de privacidad y seguridad, no está permitido procesar archivos multimedia configurados para verse una vez (View Once).*');
                     }
 
                     let txt = args.join(' ');
